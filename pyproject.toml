@@ -1,6 +1,6 @@
 [project]
 name = "overleaf-mcp-plus"
-version = "0.1.1"
+version = "0.1.2"
 description = "The most comprehensive MCP server for Overleaf — full CRUD, compile, PDF download, git history, diff, and more. (The `overleaf-mcp` name on PyPI is taken by a smaller read-only project, hence the `-plus` suffix; the CLI command is still `overleaf-mcp`.)"
 readme = "README.md"
 requires-python = ">=3.10"
