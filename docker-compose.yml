@@ -1,0 +1,11 @@
+services:
+  mcp:
+    build: .
+    environment:
+      - OVERLEAF_GIT_TOKEN=${OVERLEAF_GIT_TOKEN}
+      - OVERLEAF_SESSION=${OVERLEAF_SESSION}
+      - OVERLEAF_TEMP_DIR=/app/overleaf_cache
+    volumes:
+      - ./data/cache:/app/overleaf_cache
+    stdin_open: true
+    tty: false

@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.venv/
+overleaf_cache/
+overleaf_config.json
+.env
+*.log
+.ruff_cache/
+data/
