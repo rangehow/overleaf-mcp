@@ -10,3 +10,13 @@ overleaf_config.json
 *.log
 .ruff_cache/
 data/
+# AI assistant evolution journal (per-developer, not source)
+JOURNAL.md
+# AI assistant runtime artifacts (file-history, trash, sandbox)
+.tofu*
+.chatui/
+# Local build output kept outside dist/ (release staging)
+dist_030/
+# Promo material is deliberately not published (matches the sdist allowlist)
+promo/
+mobkatt78pofq9-demo.png
