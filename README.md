@@ -2,9 +2,11 @@
 
 The most comprehensive [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for [Overleaf](https://www.overleaf.com).
 
-**18 tools** covering full CRUD, LaTeX structure analysis, git history & diff, PDF compilation, and download — all from your AI assistant.
+**25 tools** covering full CRUD, LaTeX structure analysis, citation verification, git history & diff, PDF compilation, SyncTeX layout inspection, and source export — all from your AI assistant.
 
-**Simple setup** — set two environment variables (`OVERLEAF_SESSION`, optional `OVERLEAF_GIT_TOKEN`) when registering the MCP server, and you're done.
+**Simple setup** — supply `OVERLEAF_SESSION` for web/compile tools and/or
+`OVERLEAF_GIT_TOKEN` for Git-backed read/write tools when registering the MCP
+server. The two credentials are independent.
 
 ```
 You: "List my projects"
@@ -53,7 +55,7 @@ AI:  [compile_project + download_pdf] PDF saved to ~/Desktop/thesis.pdf ✓
 | Thread-safe locking | ✅ | ❌ | ✅ (Redis) | ❌ | ❌ | ❌ |
 | Docker support | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Free Overleaf tier | ✅† | ❌ | ❌ | ✅ | ❌ | ❌ |
-| **Total tools** | **21** | 12 | 9 | 6 | 8 | 6 |
+| **Total tools** | **25** | 12 | 9 | 6 | 8 | 6 |
 
 \* Full file rewrite only, not surgical old→new replacement.
 † Compile/download tools work on the free tier via session cookie; Git-based tools require Git integration.
@@ -62,7 +64,7 @@ AI:  [compile_project + download_pdf] PDF saved to ~/Desktop/thesis.pdf ✓
 
 ## ✨ Key Advantages
 
-- **21 tools** — the most of any Overleaf MCP server
+- **25 tools** — the most of any Overleaf MCP server
 - **Zero config** — just two env vars, no config files, no per-project setup
 - **Dual auth** — Git tokens for read/write + session cookies for compile/download
 - **Surgical edits** — `edit_file` does exact search-and-replace (like `sed`), not full rewrites
@@ -328,7 +330,7 @@ You can start with just the cookie and add the git token later.
 - `git_client.py` — Git operations (clone, pull, push, diff, history)
 - `latex.py` — LaTeX document structure parsing
 - `compile.py` — PDF compilation and download (uses session cookie)
-- `server.py` — MCP server with 18 tool definitions
+- `server.py` — MCP server with 25 tool definitions
 
 ---
 

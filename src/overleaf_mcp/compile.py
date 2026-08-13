@@ -2,7 +2,7 @@
 
 These tools require the ``compile`` optional dependency group::
 
-    pip install overleaf-mcp[compile]
+    pip install overleaf-mcp-plus[compile]
 
 Environment variable ``OVERLEAF_SESSION`` must contain the value of
 the ``overleaf_session2`` cookie from your browser.
@@ -50,7 +50,7 @@ def _headers() -> dict[str, str]:
 def _csrf_token(project_id: str) -> str:
     """Fetch the CSRF token for a project page."""
     if not _HAS_BS4:
-        raise ImportError("beautifulsoup4 required: pip install overleaf-mcp[compile]")
+        raise ImportError("beautifulsoup4 required: pip install overleaf-mcp-plus[compile]")
     r = httpx.get(
         f"{OVERLEAF_BASE_URL}/project/{project_id}",
         headers=_headers(),
@@ -68,7 +68,7 @@ def _csrf_token(project_id: str) -> str:
 def list_projects_web() -> list[dict[str, str]]:
     """List all projects via the Overleaf web dashboard (session cookie auth)."""
     if not _HAS_BS4:
-        raise ImportError("beautifulsoup4 required: pip install overleaf-mcp[compile]")
+        raise ImportError("beautifulsoup4 required: pip install overleaf-mcp-plus[compile]")
     r = httpx.get(
         f"{OVERLEAF_BASE_URL}/",
         headers=_headers(),
@@ -294,7 +294,7 @@ def create_project_web(name: str, template: str | None = None) -> dict[str, str]
     for the Overleaf example project); omit for a blank project.
     """
     if not _HAS_BS4:
-        raise ImportError("beautifulsoup4 required: pip install overleaf-mcp[compile]")
+        raise ImportError("beautifulsoup4 required: pip install overleaf-mcp-plus[compile]")
     # Get CSRF from dashboard
     r = httpx.get(
         f"{OVERLEAF_BASE_URL}/",

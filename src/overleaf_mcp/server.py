@@ -6,7 +6,7 @@ diff, compilation, and PDF download.
 
 Setup — set these environment variables before launching the server:
 
-  OVERLEAF_SESSION    (required)
+  OVERLEAF_SESSION    (required for web/compile tools)
       Value of the `overleaf_session2` browser cookie. Needed for
       list_projects, compile_project, download_pdf, download_log,
       download_source_zip, download_source,
@@ -26,7 +26,7 @@ import json
 import logging
 from typing import Any
 
-from mcp.server import Server, ServerRequestContext
+from mcp.server import CacheHint, Server, ServerRequestContext
 from mcp.server.stdio import stdio_server
 from mcp.types import (
     CallToolRequestParams,
@@ -413,7 +413,8 @@ _TOOLS: list[Tool] = [
         name="download_pdf",
         description=(
             "Download the compiled PDF to a local path. "
-            "Call compile_project first. Requires OVERLEAF_SESSION env var."
+            "Compiles the project first, so no separate compile_project call is needed. "
+            "Requires OVERLEAF_SESSION env var."
         ),
         inputSchema={
             "type": "object",
@@ -565,6 +566,158 @@ _TOOLS: list[Tool] = [
 ]
 
 
+# Human-facing MCP v2 titles and chatui's private progressive-discovery hints.
+# The latter stay in Tool._meta: chatui indexes them before a model request but
+# deliberately does not forward them in the OpenAI tool schema. This matters
+# here because 25 tools cross chatui's default progressive-disclosure threshold
+# and English-only descriptions otherwise retrieve poorly for Chinese prompts.
+_TOOL_TITLES = {
+    "create_file": "Create File",
+    "create_project": "Create Project",
+    "list_projects": "List Projects",
+    "list_files": "List Files",
+    "read_file": "Read File",
+    "verify_citations": "Verify Citations",
+    "get_sections": "Get LaTeX Sections",
+    "get_section_content": "Get Section Content",
+    "list_history": "List Git History",
+    "get_diff": "Get Git Diff",
+    "status_summary": "Project Status Summary",
+    "edit_file": "Edit File",
+    "rewrite_file": "Rewrite File",
+    "update_section": "Update LaTeX Section",
+    "sync_project": "Sync Project",
+    "upload_file": "Upload File",
+    "delete_file": "Delete File",
+    "compile_project": "Compile Project",
+    "download_pdf": "Compile and Download PDF",
+    "download_log": "Get Compilation Log",
+    "get_page_count": "Get PDF Page Count",
+    "locate_in_pdf": "Locate Source in PDF",
+    "section_page_map": "Map Sections to PDF Pages",
+    "download_source_zip": "Download Source ZIP",
+    "download_source": "Download and Extract Source",
+}
+
+_TOOL_DISCOVERY_META: dict[str, dict[str, Any]] = {
+    "create_file": {
+        "intents": ["create a project file", "新建 Overleaf 文件"],
+        "aliases": ["add file", "创建文件"],
+    },
+    "create_project": {
+        "intents": ["create an Overleaf project", "新建 Overleaf 项目"],
+        "aliases": ["new project", "创建项目"],
+    },
+    "list_projects": {
+        "intents": ["list my Overleaf projects", "列出 Overleaf 项目"],
+        "aliases": ["projects", "项目列表", "论文列表"],
+    },
+    "list_files": {
+        "bundle": "browse_source",
+        "intents": ["browse project files", "查看项目文件"],
+        "aliases": ["files", "文件列表"],
+    },
+    "read_file": {
+        "bundle": "browse_source",
+        "intents": ["read Overleaf source", "读取 Overleaf 文件"],
+        "aliases": ["open file", "查看源码"],
+    },
+    "verify_citations": {
+        "intents": ["verify references and citations", "检查引用是否真实"],
+        "aliases": ["citation hallucination", "引用幻觉", "参考文献核验"],
+    },
+    "get_sections": {
+        "bundle": "inspect_structure",
+        "intents": ["inspect LaTeX structure", "查看论文结构"],
+        "aliases": ["section outline", "章节目录"],
+    },
+    "get_section_content": {
+        "bundle": "inspect_structure",
+        "intents": ["read a LaTeX section", "读取论文章节"],
+        "aliases": ["section content", "章节内容"],
+    },
+    "list_history": {
+        "bundle": "review_history",
+        "intents": ["review project history", "查看修改历史"],
+        "aliases": ["git log", "提交历史"],
+    },
+    "get_diff": {
+        "bundle": "review_history",
+        "intents": ["review project changes", "对比论文修改"],
+        "aliases": ["git diff", "差异", "改动"],
+    },
+    "status_summary": {
+        "intents": ["summarize an Overleaf project", "概览 Overleaf 项目"],
+        "aliases": ["project overview", "项目概览", "论文概览"],
+    },
+    "edit_file": {
+        "bundle": "edit_source",
+        "intents": ["edit Overleaf source", "修改 Overleaf 文件"],
+        "aliases": ["search replace", "局部修改"],
+    },
+    "rewrite_file": {
+        "bundle": "edit_source",
+        "intents": ["replace a complete file", "重写 Overleaf 文件"],
+        "aliases": ["replace file", "全文重写"],
+    },
+    "update_section": {
+        "bundle": "edit_source",
+        "intents": ["update a LaTeX section", "修改论文章节"],
+        "aliases": ["edit section", "章节修改", "修改摘要"],
+    },
+    "sync_project": {
+        "intents": ["pull latest Overleaf changes", "同步 Overleaf 项目"],
+        "aliases": ["git pull", "同步项目"],
+    },
+    "upload_file": {
+        "intents": ["upload an asset to Overleaf", "上传图片或附件到 Overleaf"],
+        "aliases": ["upload image", "上传文件", "上传图片"],
+    },
+    "delete_file": {
+        "intents": ["delete an Overleaf file", "删除 Overleaf 文件"],
+        "aliases": ["remove file", "删除文件"],
+    },
+    "compile_project": {
+        "bundle": "compile_and_debug",
+        "intents": ["compile LaTeX on Overleaf", "编译 Overleaf 论文"],
+        "aliases": ["build PDF", "编译论文"],
+    },
+    "download_pdf": {
+        "intents": ["compile and download PDF", "编译并下载 PDF"],
+        "aliases": ["save PDF", "下载论文"],
+    },
+    "download_log": {
+        "bundle": "compile_and_debug",
+        "intents": ["debug LaTeX compilation", "查看 LaTeX 编译错误"],
+        "aliases": ["compile log", "编译日志", "报错日志"],
+    },
+    "get_page_count": {
+        "bundle": "compile_and_debug",
+        "intents": ["count PDF pages", "查看论文页数"],
+        "aliases": ["page count", "多少页", "页数"],
+    },
+    "locate_in_pdf": {
+        "bundle": "inspect_layout",
+        "intents": ["locate a source line in PDF", "定位源码在 PDF 的页码"],
+        "aliases": ["SyncTeX", "行号定位", "PDF 位置"],
+    },
+    "section_page_map": {
+        "bundle": "inspect_layout",
+        "intents": ["map sections to PDF pages", "查看章节在 PDF 的页码"],
+        "aliases": ["section layout", "章节页码", "页面布局"],
+    },
+    "download_source_zip": {
+        "bundle": "export_source",
+        "intents": ["download Overleaf source as ZIP", "下载 Overleaf 源码压缩包"],
+        "aliases": ["source ZIP", "源码压缩包"],
+    },
+    "download_source": {
+        "bundle": "export_source",
+        "intents": ["download and extract Overleaf source", "下载并解压 Overleaf 源码"],
+        "aliases": ["export source", "导出源码"],
+    },
+}
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Tool safety annotations
@@ -662,7 +815,7 @@ _WRITE_TOOLS = {
 
 
 def _apply_tool_annotations(tools: list[Tool]) -> None:
-    """Stamp every tool with its safety hints, refusing to leave one unclassified.
+    """Stamp every tool with display/discovery/safety metadata.
 
     Raises:
         RuntimeError: a tool is missing from both tables, appears in both, or a
@@ -675,6 +828,18 @@ def _apply_tool_annotations(tools: list[Tool]) -> None:
     """
     names = {t.name for t in tools}
     classified = _READ_ONLY_TOOLS | set(_WRITE_TOOLS)
+
+    for label, metadata_names in (
+        ("title", set(_TOOL_TITLES)),
+        ("discovery metadata", set(_TOOL_DISCOVERY_META)),
+    ):
+        missing = names - metadata_names
+        phantom_metadata = metadata_names - names
+        if missing or phantom_metadata:
+            raise RuntimeError(
+                f"tool {label} table mismatch: missing={sorted(missing)}, "
+                f"unknown={sorted(phantom_metadata)}"
+            )
 
     both = _READ_ONLY_TOOLS & set(_WRITE_TOOLS)
     if both:
@@ -694,14 +859,24 @@ def _apply_tool_annotations(tools: list[Tool]) -> None:
             f"safety table names non-existent tool(s): {sorted(phantom)}")
 
     for tool in tools:
+        tool.title = _TOOL_TITLES[tool.name]
+        tool.meta = {
+            **_TOOL_DISCOVERY_META[tool.name],
+            "profiles": ["overleaf", "latex", "academic writing"],
+            "risk": "read" if tool.name in _READ_ONLY_TOOLS else "write",
+        }
         if tool.name in _READ_ONLY_TOOLS:
-            tool.annotations = ToolAnnotations(readOnlyHint=True)
+            tool.annotations = ToolAnnotations(
+                readOnlyHint=True,
+                openWorldHint=True,
+            )
         else:
             destructive, idempotent = _WRITE_TOOLS[tool.name]
             tool.annotations = ToolAnnotations(
                 readOnlyHint=False,
                 destructiveHint=destructive,
                 idempotentHint=idempotent,
+                openWorldHint=True,
             )
 
 
@@ -718,7 +893,7 @@ This server provides tools for the Overleaf LaTeX editor.
 Credentials are read from environment variables set by the host
 (e.g. the chatui MCP install dialog):
 
-  OVERLEAF_SESSION    (required)
+  OVERLEAF_SESSION    (required for web/compile tools)
       Session cookie `overleaf_session2` — needed for list_projects,
       compile_project, download_pdf, download_log, create_project.
       Copy from browser DevTools → Application → Cookies →
@@ -810,7 +985,16 @@ async def handle_call_tool(
 server = Server(
     "overleaf-mcp",
     version=__version__,
+    title="Overleaf MCP",
+    description=(
+        "Read, edit, compile, inspect, and export Overleaf LaTeX projects."
+    ),
     instructions=_SERVER_INSTRUCTIONS,
+    website_url="https://github.com/rangehow/overleaf-mcp",
+    # The catalogue is immutable for the life of this process and contains no
+    # credential-specific data, so MCP 2026 clients can safely reuse it across
+    # authorization contexts. Legacy clients simply ignore this v2 hint.
+    cache_hints={"tools/list": CacheHint(ttl_ms=86_400_000, scope="public")},
     on_list_tools=handle_list_tools,
     on_call_tool=handle_call_tool,
 )
@@ -829,6 +1013,8 @@ _COOKIE_ONLY_TOOLS = {
     "download_source",
     "create_project",
 }
+
+_ALL_TOOL_NAMES = frozenset(tool.name for tool in _TOOLS)
 
 
 _MISSING_CREDENTIALS_HINT = (
@@ -885,6 +1071,10 @@ def _auto_setup_guard(name: str) -> str | None:
     has_session = bool(get_session())
     has_token = bool(get_git_token())
 
+    # Let the dispatcher report an unknown tool independently of credentials.
+    if name not in _ALL_TOOL_NAMES:
+        return None
+
     # Cookie-only tools: need just the session cookie
     if name in _COOKIE_ONLY_TOOLS:
         if has_session:
@@ -894,17 +1084,13 @@ def _auto_setup_guard(name: str) -> str | None:
             "but it is not set.\n\n" + _MISSING_CREDENTIALS_HINT
         )
 
-    # Git-based tools: need both session and git token
-    if has_session and has_token:
+    # Git-based tools authenticate directly against git.overleaf.com. They do
+    # not need the unrelated web-dashboard session cookie.
+    if has_token:
         return None
-    missing = []
-    if not has_session:
-        missing.append("OVERLEAF_SESSION")
-    if not has_token:
-        missing.append("OVERLEAF_GIT_TOKEN")
     return (
-        f"❌ `{name}` requires the following environment variable(s) which "
-        f"are not set: {', '.join(missing)}.\n\n" + _MISSING_CREDENTIALS_HINT
+        f"❌ `{name}` requires the OVERLEAF_GIT_TOKEN environment variable, "
+        "but it is not set.\n\n" + _MISSING_CREDENTIALS_HINT
     )
 
 
@@ -930,7 +1116,7 @@ async def _dispatch(name: str, args: dict[str, Any]) -> str:
 
     if name == "create_project":
         if not _HAS_COMPILE:
-            return "Error: compile extras required. pip install overleaf-mcp[compile]"
+            return "Error: compile extras required. pip install overleaf-mcp-plus[compile]"
         result = await asyncio.to_thread(_compile_mod.create_project_web, args["name"])
         # Emit a human-readable confirmation that shows BOTH the natural
         # name the user just typed AND the full 24-hex project_id that
@@ -957,7 +1143,7 @@ async def _dispatch(name: str, args: dict[str, Any]) -> str:
         if not _HAS_COMPILE:
             return (
                 "Error: compile extras required for list_projects.\n"
-                "Run: pip install overleaf-mcp[compile]"
+                "Run: pip install overleaf-mcp-plus[compile]"
             )
         if not get_session():
             return (
@@ -1199,20 +1385,20 @@ async def _dispatch(name: str, args: dict[str, Any]) -> str:
 
     if name == "compile_project":
         if not _HAS_COMPILE:
-            return "Error: compile extras required. pip install overleaf-mcp[compile]"
+            return "Error: compile extras required. pip install overleaf-mcp-plus[compile]"
         result = await asyncio.to_thread(_compile_mod.compile_project, args["project_id"])
         return json.dumps(result, indent=2)
 
     if name == "download_pdf":
         if not _HAS_COMPILE:
-            return "Error: compile extras required. pip install overleaf-mcp[compile]"
+            return "Error: compile extras required. pip install overleaf-mcp-plus[compile]"
         return await asyncio.to_thread(
             _compile_mod.download_pdf, args["project_id"], args["output_path"]
         )
 
     if name == "download_log":
         if not _HAS_COMPILE:
-            return "Error: compile extras required. pip install overleaf-mcp[compile]"
+            return "Error: compile extras required. pip install overleaf-mcp-plus[compile]"
         import httpx
         from .compile import _headers, _build_output_url  # noqa: F811
 
@@ -1231,11 +1417,16 @@ async def _dispatch(name: str, args: dict[str, Any]) -> str:
         r = httpx.get(log_url, headers=_headers(), follow_redirects=True, timeout=30)
         r.raise_for_status()
         text = r.text
+        if len(text) > 50000:
+            text = text[-50000:]
+            return f"[… truncated to last 50000 chars]\n\n{text}"
+        return text
+
     # ── LAYOUT / SYNCTEX ─────────────────────────────────────────────────
 
     if name == "get_page_count":
         if not _HAS_LAYOUT:
-            return "Error: compile extras required. pip install overleaf-mcp[compile]"
+            return "Error: compile extras required. pip install overleaf-mcp-plus[compile]"
         result = await asyncio.to_thread(_layout_mod.get_page_count, args["project_id"])
         pages = result.get("pages")
         if pages is None:
@@ -1250,7 +1441,7 @@ async def _dispatch(name: str, args: dict[str, Any]) -> str:
 
     if name == "locate_in_pdf":
         if not _HAS_LAYOUT:
-            return "Error: compile extras required. pip install overleaf-mcp[compile]"
+            return "Error: compile extras required. pip install overleaf-mcp-plus[compile]"
         result = await asyncio.to_thread(
             _layout_mod.locate_in_pdf,
             args["project_id"],
@@ -1270,27 +1461,22 @@ async def _dispatch(name: str, args: dict[str, Any]) -> str:
 
     if name == "section_page_map":
         if not _HAS_LAYOUT:
-            return "Error: compile extras required. pip install overleaf-mcp[compile]"
+            return "Error: compile extras required. pip install overleaf-mcp-plus[compile]"
         result = await asyncio.to_thread(
             _layout_mod.section_page_map, args["project_id"], args.get("file")
         )
         return _layout_mod.format_section_page_map(result)
 
-        if len(text) > 50000:
-            text = text[-50000:]
-            return f"[… truncated to last 50000 chars]\n\n{text}"
-        return text
-
     if name == "download_source_zip":
         if not _HAS_COMPILE:
-            return "Error: compile extras required. pip install overleaf-mcp[compile]"
+            return "Error: compile extras required. pip install overleaf-mcp-plus[compile]"
         return await asyncio.to_thread(
             _compile_mod.download_source_zip, args["project_id"], args["output_path"]
         )
 
     if name == "download_source":
         if not _HAS_COMPILE:
-            return "Error: compile extras required. pip install overleaf-mcp[compile]"
+            return "Error: compile extras required. pip install overleaf-mcp-plus[compile]"
         return await asyncio.to_thread(
             _compile_mod.download_source,
             args["project_id"],

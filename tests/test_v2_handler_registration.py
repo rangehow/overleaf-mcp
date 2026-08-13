@@ -105,6 +105,19 @@ def test_tool_order_is_deterministic():
     assert first == second
 
 
+def test_static_tool_catalog_advertises_public_v2_cache_hint():
+    """The immutable 25-tool list should not be transferred every request."""
+    hint = srv.server.cache_hints['tools/list']
+    assert hint.ttl_ms == 86_400_000
+    assert hint.scope == 'public'
+
+
+def test_server_identity_uses_v2_display_metadata():
+    assert srv.server.title == 'Overleaf MCP'
+    assert 'compile' in srv.server.description
+    assert srv.server.website_url == 'https://github.com/rangehow/overleaf-mcp'
+
+
 def test_tools_still_serialize_camelcase_on_the_wire():
     """v2 moved model FIELDS to snake_case but kept camelCase wire aliases.
 
@@ -158,3 +171,25 @@ def test_version_matches_the_v2_release_line():
     assert (int(major), int(minor)) >= (0, 3), (
         f'version {overleaf_mcp.__version__} speaks the v2 API but is numbered '
         f'in the 0.2.x line, which pins mcp<2')
+
+
+def test_git_and_cookie_credentials_are_independent(monkeypatch):
+    """Git tools must not demand the unrelated web-dashboard session."""
+    for var in ('OVERLEAF_SESSION', 'OVERLEAF_GIT_TOKEN'):
+        monkeypatch.delenv(var, raising=False)
+
+    monkeypatch.setenv('OVERLEAF_GIT_TOKEN', 'olp_test')
+    assert srv._auto_setup_guard('read_file') is None
+    assert srv._auto_setup_guard('edit_file') is None
+    cookie_error = srv._auto_setup_guard('list_projects')
+    assert 'OVERLEAF_SESSION' in cookie_error
+
+    monkeypatch.delenv('OVERLEAF_GIT_TOKEN')
+    monkeypatch.setenv('OVERLEAF_SESSION', 's%3Atest')
+    assert srv._auto_setup_guard('list_projects') is None
+    git_error = srv._auto_setup_guard('read_file')
+    assert 'OVERLEAF_GIT_TOKEN' in git_error
+    assert 'requires the OVERLEAF_SESSION' not in git_error
+
+    monkeypatch.delenv('OVERLEAF_SESSION')
+    assert srv._auto_setup_guard('nonexistent_tool') is None

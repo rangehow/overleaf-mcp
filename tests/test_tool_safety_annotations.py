@@ -124,6 +124,16 @@ def test_every_tool_carries_annotations():
     assert not missing, f'tools with no annotations: {missing}'
 
 
+def test_every_tool_carries_v2_display_and_progressive_discovery_metadata():
+    for tool in srv._TOOLS:
+        assert tool.title, tool.name
+        assert tool.meta['risk'] in {'read', 'write'}, tool.name
+        assert tool.meta['profiles'] == ['overleaf', 'latex', 'academic writing']
+        assert tool.meta.get('intents'), tool.name
+        assert tool.meta.get('aliases'), tool.name
+        assert _hint(tool, 'openWorldHint', 'open_world_hint') is True, tool.name
+
+
 def test_the_two_tables_are_disjoint():
     assert not (EXPECTED_READ_ONLY & set(EXPECTED_WRITE))
 
