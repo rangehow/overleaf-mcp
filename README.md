@@ -168,10 +168,10 @@ at install time — no shell setup needed.
 
 | Credential | What you can do | When you need it |
 |---|---|---|
-| **Session cookie** (`overleaf_session2`) | `list_projects`, compile, download PDF, download log, create project | Works on the free tier. Expires ~30 days — refresh when tools start failing with auth errors. |
-| **Git token** (`olp_...`) | Read/write/edit files, commit history, diffs | Optional. Only if you want to edit files. Requires a paid plan. |
+| **Session cookie** (`overleaf_session2`) | `list_projects`, compile, download PDF, download log, create project, **plus the full `web_*` tool family below** (list/read/rewrite/edit/upload/delete files, section parsing, status summary, citation verification) | Works on the free tier. Expires ~30 days - refresh when tools start failing with auth errors. |
+| **Git token** (`olp_...`) | Read/write/edit files via git, commit history, diffs (the non-`web_`-prefixed tools) | Optional. Only needed for git-based history/diff, or if you prefer git semantics over the `web_*` tools. Requires a paid plan (Git Integration). |
 
-You can start with just the cookie and add the git token later.
+You can start with just the cookie and add the git token later. **Free-tier accounts** (no paid plan, `OVERLEAF_GIT_TOKEN` unavailable) get full CRUD via the `web_*` tools — see [Free-Tier Web Tools](#-free-tier-web-tools-session-cookie-only) below.
 
 ### All Environment Variables
 
@@ -271,6 +271,46 @@ You can start with just the cookie and add the git token later.
 
 ---
 
+## 🆓 Free-Tier Web Tools (session-cookie only)
+
+Git Integration (`OVERLEAF_GIT_TOKEN`) requires a **paid** Overleaf plan. The
+`web_*` tools below give **free-tier accounts** the same CRUD/structure
+capabilities using only `OVERLEAF_SESSION` — no git token, no paid plan.
+
+Overleaf's project file tree (folder/doc IDs) is only exposed over its
+internal real-time channel, not any REST endpoint. `web_*` tools that need
+those IDs do a single short-lived, read-only round trip over that channel
+(connect → `joinProject` → disconnect — no live editing/OT) to discover them,
+then perform the actual read/write via plain REST calls (the same endpoints
+the web UI's file tree and drag-and-drop uploader use). See
+`src/overleaf_mcp/realtime.py` for the implementation and rationale.
+
+| Tool | Free-tier equivalent of | Description |
+|---|---|---|
+| `web_list_files` | `list_files` | List file paths in a project |
+| `web_read_file` | `read_file` | Read a file's full content |
+| `web_get_sections` | `get_sections` | Parse LaTeX section hierarchy with previews |
+| `web_get_section_content` | `get_section_content` | Get full content of a section by title |
+| `web_status_summary` | `status_summary` | Project overview: file count, structure |
+| `web_verify_citations` | `verify_citations` | Same hallucinated-reference detection as `verify_citations`, reading via the web path |
+| `web_rewrite_file` | `rewrite_file` / `create_file` | Create or fully overwrite a file's content |
+| `web_edit_file` | `edit_file` | Surgical search-and-replace (must match exactly once) |
+| `web_update_section` | `update_section` | Update a LaTeX section body by title |
+| `web_upload_file` | `upload_file` | Upload a (possibly binary) file from **base64-encoded content** — no local filesystem access needed on the MCP host, useful for chat clients attaching images directly |
+| `web_delete_file` | `delete_file` | Delete a file/doc |
+
+**Known limitations:**
+- These tools do not create missing intermediate folders — the parent
+  folder of `file_path` must already exist.
+- There is no free-tier equivalent of `list_history` / `get_diff` (real git
+  log/diff) or `sync_project` (a git-pull concept that doesn't apply since
+  `web_*` tools always read live from the server).
+- Overwriting an existing **binary** file (e.g. via `web_upload_file`)
+  creates a new `entity_id` each time (Overleaf's own versioning behavior
+  for binary files); overwriting a **text** doc keeps the same `entity_id`.
+
+---
+
 ## 💡 Usage Examples
 
 ```
@@ -297,6 +337,11 @@ You can start with just the cookie and add the git token later.
 "Compile my thesis and tell me if it succeeded"
 "Download the PDF to ~/Desktop/thesis.pdf"
 "Show me the compilation log — I have an error"
+
+"I'm on the free tier — read main.tex"              (→ web_read_file)
+"Replace the intro paragraph with: [new text]"       (→ web_edit_file)
+"Upload this image to figures/plot.png"              (→ web_upload_file, base64 content)
+"Delete the old draft.tex"                            (→ web_delete_file)
 ```
 
 ---

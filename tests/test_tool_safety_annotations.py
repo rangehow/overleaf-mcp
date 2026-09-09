@@ -53,6 +53,10 @@ EXPECTED_READ_ONLY = {
     'list_projects', 'list_files', 'read_file', 'verify_citations',
     'get_sections', 'get_section_content', 'list_history', 'get_diff',
     'status_summary',
+    # Free-tier (session-cookie only) equivalents — see web_write.py /
+    # realtime.py. Same read-only behaviour as their non-`web_` counterparts.
+    'web_list_files', 'web_read_file', 'web_get_sections',
+    'web_get_section_content', 'web_status_summary', 'web_verify_citations',
 }
 
 #: name -> (destructive, idempotent) for every mutating tool.
@@ -73,6 +77,12 @@ EXPECTED_WRITE = {
     'download_pdf':        (True,  True),
     'download_source_zip': (True,  True),
     'download_source':     (True,  True),
+    # Free-tier (session-cookie only) write equivalents.
+    'web_rewrite_file':    (True,  False),
+    'web_edit_file':       (True,  False),
+    'web_upload_file':     (True,  False),
+    'web_delete_file':     (True,  False),
+    'web_update_section':  (True,  False),
 }
 
 
