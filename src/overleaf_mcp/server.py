@@ -62,6 +62,17 @@ try:
 except ImportError:
     _HAS_LAYOUT = False
 
+# Free-tier web write (session-cookie only). Needs the `websockets` package
+# (for the one-shot realtime ID-discovery round trip) on top of the
+# `compile` extras, so it shares the _HAS_COMPILE guard but has its own
+# ImportError fallback for the extra dependency.
+try:
+    from . import web_write as _web_write_mod
+
+    _HAS_WEB_WRITE = _HAS_COMPILE
+except ImportError:
+    _HAS_WEB_WRITE = False
+
 # ---------------------------------------------------------------------------
 # Shared schema fragment
 # ---------------------------------------------------------------------------
@@ -562,6 +573,227 @@ _TOOLS: list[Tool] = [
             "required": ["project_id", "output_dir"],
         },
     ),
+    # ── FREE-TIER WEB WRITE (session-cookie only, no git token) ──────────
+    Tool(
+        name="web_list_files",
+        description=(
+            "List file paths in an Overleaf project WITHOUT requiring "
+            "OVERLEAF_GIT_TOKEN. Uses a single short-lived realtime "
+            "'joinProject' round trip to discover the project's file tree "
+            "(this is not exposed via any REST endpoint). Use this instead "
+            "of list_files when only OVERLEAF_SESSION is configured."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {"project_id": _PROJECT_ID_PROP},
+            "required": ["project_id"],
+        },
+    ),
+    Tool(
+        name="web_read_file",
+        description=(
+            "Read a file's contents from an Overleaf project WITHOUT "
+            "requiring OVERLEAF_GIT_TOKEN. Downloads the project source ZIP "
+            "with the session cookie and extracts one file. Use this "
+            "instead of read_file when only OVERLEAF_SESSION is configured."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "project_id": _PROJECT_ID_PROP,
+                "file_path": {"type": "string", "description": "Path to the file"},
+            },
+            "required": ["project_id", "file_path"],
+        },
+    ),
+    Tool(
+        name="web_rewrite_file",
+        description=(
+            "Create or fully overwrite a file's content in an Overleaf "
+            "project WITHOUT requiring OVERLEAF_GIT_TOKEN. Uses Overleaf's "
+            "web upload endpoint (the same one the drag-and-drop uploader "
+            "calls): if a file already exists at file_path it is replaced "
+            "in place, otherwise a new one is created. NOTE: this does NOT "
+            "create missing parent folders \u2014 they must already exist. "
+            "Use this instead of rewrite_file/create_file when only "
+            "OVERLEAF_SESSION is configured."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "project_id": _PROJECT_ID_PROP,
+                "file_path": {"type": "string"},
+                "content": {"type": "string", "description": "New full file content"},
+            },
+            "required": ["project_id", "file_path", "content"],
+        },
+    ),
+    Tool(
+        name="web_edit_file",
+        description=(
+            "Surgical search-and-replace edit in a file WITHOUT requiring "
+            "OVERLEAF_GIT_TOKEN. old_string must match exactly once. "
+            "Downloads the current content, replaces locally, then "
+            "re-uploads the full file via the web upload endpoint. Use this "
+            "instead of edit_file when only OVERLEAF_SESSION is configured."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "project_id": _PROJECT_ID_PROP,
+                "file_path": {"type": "string"},
+                "old_string": {"type": "string", "description": "Exact text to find"},
+                "new_string": {"type": "string", "description": "Replacement text"},
+            },
+            "required": ["project_id", "file_path", "old_string", "new_string"],
+        },
+    ),
+    Tool(
+        name="web_upload_file",
+        description=(
+            "Upload a local BINARY-safe file (images, PDFs, or any "
+            "non-text asset) into an Overleaf project from base64-encoded "
+            "content, WITHOUT requiring OVERLEAF_GIT_TOKEN. Accepts either "
+            "a raw base64 string or a data: URL (e.g. "
+            "'data:image/png;base64,...') \u2014 the data: prefix is "
+            "stripped automatically. If a file already exists at file_path "
+            "it is replaced in place, otherwise it is created. NOTE: this "
+            "does NOT create missing parent folders \u2014 they must "
+            "already exist. Use this instead of upload_file (which reads "
+            "from a local filesystem path) when only OVERLEAF_SESSION is "
+            "configured, or when the caller has no shared filesystem with "
+            "the MCP server (e.g. a chat client attaching an image "
+            "directly)."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "project_id": _PROJECT_ID_PROP,
+                "file_path": {
+                    "type": "string",
+                    "description": "Destination path inside the project (e.g. 'figures/cat.png').",
+                },
+                "content_base64": {
+                    "type": "string",
+                    "description": (
+                        "Base64-encoded file content, or a data: URL "
+                        "containing it. Decoded size is capped at 20 MB."
+                    ),
+                },
+            },
+            "required": ["project_id", "file_path", "content_base64"],
+        },
+    ),
+    Tool(
+        name="web_delete_file",
+        description=(
+            "Delete a file/doc from an Overleaf project WITHOUT requiring "
+            "OVERLEAF_GIT_TOKEN. Use this instead of delete_file when only "
+            "OVERLEAF_SESSION is configured."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "project_id": _PROJECT_ID_PROP,
+                "file_path": {"type": "string"},
+            },
+            "required": ["project_id", "file_path"],
+        },
+    ),
+    Tool(
+        name="web_get_sections",
+        description=(
+            "Parse a LaTeX file's section/subsection structure WITHOUT "
+            "requiring OVERLEAF_GIT_TOKEN. Use this instead of get_sections "
+            "when only OVERLEAF_SESSION is configured."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "project_id": _PROJECT_ID_PROP,
+                "file_path": {"type": "string", "description": "Path to the LaTeX file"},
+            },
+            "required": ["project_id", "file_path"],
+        },
+    ),
+    Tool(
+        name="web_get_section_content",
+        description=(
+            "Get the full content of a specific LaTeX section by title "
+            "WITHOUT requiring OVERLEAF_GIT_TOKEN. Use this instead of "
+            "get_section_content when only OVERLEAF_SESSION is configured."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "project_id": _PROJECT_ID_PROP,
+                "file_path": {"type": "string"},
+                "section_title": {"type": "string", "description": "Section title to retrieve"},
+            },
+            "required": ["project_id", "file_path", "section_title"],
+        },
+    ),
+    Tool(
+        name="web_update_section",
+        description=(
+            "Update a specific LaTeX section body by title, preserving the "
+            "header, WITHOUT requiring OVERLEAF_GIT_TOKEN. Downloads the "
+            "file, patches the section locally, then re-uploads the whole "
+            "file. Use this instead of update_section when only "
+            "OVERLEAF_SESSION is configured."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "project_id": _PROJECT_ID_PROP,
+                "file_path": {"type": "string"},
+                "section_title": {"type": "string"},
+                "new_content": {
+                    "type": "string",
+                    "description": "New section body (excluding \\section{} header)",
+                },
+            },
+            "required": ["project_id", "file_path", "section_title", "new_content"],
+        },
+    ),
+    Tool(
+        name="web_status_summary",
+        description=(
+            "Get a quick overview (file count, structure of the main .tex "
+            "file, project URL) WITHOUT requiring OVERLEAF_GIT_TOKEN. Use "
+            "this instead of status_summary when only OVERLEAF_SESSION is "
+            "configured."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {"project_id": _PROJECT_ID_PROP},
+            "required": ["project_id"],
+        },
+    ),
+    Tool(
+        name="web_verify_citations",
+        description=(
+            "Detect likely-hallucinated references in the project's "
+            "bibliography WITHOUT requiring OVERLEAF_GIT_TOKEN (verifies "
+            "each .bib entry's DOI/arXiv id against CrossRef & arXiv, zero "
+            "LLM calls). Use this instead of verify_citations when only "
+            "OVERLEAF_SESSION is configured."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "project_id": _PROJECT_ID_PROP,
+                "bib_path": {
+                    "type": "string",
+                    "description": (
+                        "Optional explicit path to a .bib file. Omit to "
+                        "auto-discover every .bib in the project."
+                    ),
+                },
+            },
+            "required": ["project_id"],
+        },
+    ),
 ]
 
 
@@ -628,6 +860,12 @@ _READ_ONLY_TOOLS = frozenset({
     "list_history",
     "get_diff",
     "status_summary",
+    "web_list_files",
+    "web_read_file",
+    "web_get_sections",
+    "web_get_section_content",
+    "web_status_summary",
+    "web_verify_citations",
 })
 
 #: Tools that change something — remote project state, remote compute, or the
@@ -657,6 +895,12 @@ _WRITE_TOOLS = {
     # ── Local filesystem writes ──
     "download_pdf":        (True,  True),   # overwrites output_path
     "download_source_zip": (True,  True),   # overwrites output_path
+    # ── Free-tier web write (session-cookie only, no git token) ──
+    "web_rewrite_file":    (True,  False),  # replaces or creates a file
+    "web_edit_file":       (True,  False),  # rewrites a region of a file
+    "web_upload_file":     (True,  False),  # replaces or creates a (binary) file
+    "web_delete_file":     (True,  False),  # removes a file/doc outright
+    "web_update_section":  (True,  False),  # replaces a section body
     "download_source":     (True,  True),   # overwrite=true clobbers a dir
 }
 
@@ -828,6 +1072,17 @@ _COOKIE_ONLY_TOOLS = {
     "download_source_zip",
     "download_source",
     "create_project",
+    "web_list_files",
+    "web_read_file",
+    "web_rewrite_file",
+    "web_edit_file",
+    "web_upload_file",
+    "web_delete_file",
+    "web_get_sections",
+    "web_get_section_content",
+    "web_update_section",
+    "web_status_summary",
+    "web_verify_citations",
 }
 
 
@@ -1297,6 +1552,172 @@ async def _dispatch(name: str, args: dict[str, Any]) -> str:
             args["output_dir"],
             _coerce_bool(args.get("overwrite"), default=False),
         )
+
+    # ── FREE-TIER WEB WRITE (session-cookie only, no git token) ──────────
+
+    if name == "web_list_files":
+        if not _HAS_WEB_WRITE:
+            return "Error: compile extras + websockets required. pip install 'overleaf-mcp[compile]' websockets"
+        files = await asyncio.to_thread(_web_write_mod.list_files_web, args["project_id"])
+        if not files:
+            return "No files found"
+        return f"Files ({len(files)}):\n" + "\n".join(f" • {f}" for f in files)
+
+    if name == "web_read_file":
+        if not _HAS_WEB_WRITE:
+            return "Error: compile extras + websockets required. pip install 'overleaf-mcp[compile]' websockets"
+        content = await asyncio.to_thread(
+            _compile_mod.read_file_web, args["project_id"], args["file_path"]
+        )
+        return f"── {args['file_path']} ({len(content)} chars) ──\n\n{content}"
+
+    if name == "web_rewrite_file":
+        if not _HAS_WEB_WRITE:
+            return "Error: compile extras + websockets required. pip install 'overleaf-mcp[compile]' websockets"
+        return await asyncio.to_thread(
+            _web_write_mod.upload_file_content,
+            args["project_id"],
+            args["file_path"],
+            args["content"],
+        )
+
+    if name == "web_edit_file":
+        if not _HAS_WEB_WRITE:
+            return "Error: compile extras + websockets required. pip install 'overleaf-mcp[compile]' websockets"
+        return await asyncio.to_thread(
+            _web_write_mod.edit_file_content,
+            args["project_id"],
+            args["file_path"],
+            args["old_string"],
+            args["new_string"],
+        )
+
+    if name == "web_upload_file":
+        if not _HAS_WEB_WRITE:
+            return "Error: compile extras + websockets required. pip install 'overleaf-mcp[compile]' websockets"
+        return await asyncio.to_thread(
+            _web_write_mod.upload_file_base64,
+            args["project_id"],
+            args["file_path"],
+            args["content_base64"],
+        )
+
+    if name == "web_delete_file":
+        if not _HAS_WEB_WRITE:
+            return "Error: compile extras + websockets required. pip install 'overleaf-mcp[compile]' websockets"
+        return await asyncio.to_thread(
+            _web_write_mod.delete_file_web,
+            args["project_id"],
+            args["file_path"],
+        )
+
+    if name == "web_get_sections":
+        if not _HAS_WEB_WRITE:
+            return "Error: compile extras + websockets required. pip install 'overleaf-mcp[compile]' websockets"
+        pid = args["project_id"]
+        content = await asyncio.to_thread(_compile_mod.read_file_web, pid, args["file_path"])
+        sections = parse_sections(content)
+        if not sections:
+            return f"No sections found in '{args['file_path']}'"
+        lines = [f"Sections in '{args['file_path']}' ({len(sections)} total):"]
+        for s in sections:
+            indent = "  " * s["level"]
+            lines.append(f"\n{indent}[{s['type']}] {s['title']}")
+            lines.append(f"{indent}  {s['preview'][:120]}…")
+        return "\n".join(lines)
+
+    if name == "web_get_section_content":
+        if not _HAS_WEB_WRITE:
+            return "Error: compile extras + websockets required. pip install 'overleaf-mcp[compile]' websockets"
+        pid = args["project_id"]
+        content = await asyncio.to_thread(_compile_mod.read_file_web, pid, args["file_path"])
+        section = get_section_content(content, args["section_title"])
+        if section is None:
+            available = [s["title"] for s in parse_sections(content)]
+            return (
+                f"Section '{args['section_title']}' not found.\n"
+                f"Available: {', '.join(available)}"
+            )
+        return section
+
+    if name == "web_update_section":
+        if not _HAS_WEB_WRITE:
+            return "Error: compile extras + websockets required. pip install 'overleaf-mcp[compile]' websockets"
+        pid = args["project_id"]
+        content = await asyncio.to_thread(_compile_mod.read_file_web, pid, args["file_path"])
+        new_content = update_section(content, args["section_title"], args["new_content"])
+        if new_content is None:
+            available = [s["title"] for s in parse_sections(content)]
+            return f"Section '{args['section_title']}' not found. Available: {', '.join(available)}"
+        return await asyncio.to_thread(
+            _web_write_mod.upload_file_content, pid, args["file_path"], new_content
+        )
+
+    if name == "web_status_summary":
+        if not _HAS_WEB_WRITE:
+            return "Error: compile extras + websockets required. pip install 'overleaf-mcp[compile]' websockets"
+        pid = args["project_id"]
+
+        natural_name: str | None = None
+        try:
+            web_projects = await asyncio.to_thread(_compile_mod.list_projects_web)
+            for wp in web_projects:
+                if wp.get("id") == pid:
+                    natural_name = wp.get("name")
+                    break
+        except Exception as e:
+            logger.warning("web_status_summary: could not resolve natural name: %s", e)
+
+        all_files = await asyncio.to_thread(_web_write_mod.list_files_web, pid)
+        tex_files = [f for f in all_files if f.lower().endswith(".tex")]
+
+        title = natural_name if natural_name else pid
+        url = project_url(pid)
+        summary = [f"📄 Project: {title} [{pid}]"]
+        if url:
+            summary.append(f"   URL: {url}")
+        summary += [
+            f"   Total files: {len(all_files)}",
+            f"   .tex files: {len(tex_files)}",
+        ]
+
+        if tex_files:
+            main_file = next((f for f in tex_files if "main" in f.lower()), tex_files[0])
+            content = await asyncio.to_thread(_compile_mod.read_file_web, pid, main_file)
+            sections = parse_sections(content)
+            summary.append(f"\n📋 Structure of {main_file} ({len(sections)} sections):")
+            for i, s in enumerate(sections):
+                indent = "  " * s["level"]
+                summary.append(f"   {indent}{i + 1}. [{s['type']}] {s['title']}")
+
+        return "\n".join(summary)
+
+    if name == "web_verify_citations":
+        if not _HAS_WEB_WRITE:
+            return "Error: compile extras + websockets required. pip install 'overleaf-mcp[compile]' websockets"
+        ok, why = _verify_mod.verify_available()
+        if not ok:
+            return f"Error: {why}"
+        pid = args["project_id"]
+        explicit = (args.get("bib_path") or "").strip()
+        if explicit:
+            bib_paths = [explicit]
+        else:
+            all_files = await asyncio.to_thread(_web_write_mod.list_files_web, pid)
+            bib_paths = [f for f in all_files if f.endswith(_verify_mod._BIB_EXT)]
+        if not bib_paths:
+            return ("No .bib file found in the project. Pass bib_path explicitly "
+                    "if your bibliography lives elsewhere.")
+
+        def _read(p):
+            return _compile_mod.read_file_web(pid, p)
+
+        combined, read_paths = await asyncio.to_thread(
+            _verify_mod.collect_bibtex, _read, bib_paths)
+        if not combined.strip():
+            return f"Bibliography file(s) {', '.join(bib_paths)} were empty or unreadable."
+        result = await asyncio.to_thread(_verify_mod.run_verification, combined)
+        return _verify_mod.format_report(result, read_paths)
 
     return f"Unknown tool: {name}"
 
