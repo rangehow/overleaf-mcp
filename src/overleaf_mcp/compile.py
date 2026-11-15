@@ -104,7 +104,6 @@ def compile_project(project_id: str) -> dict:
             "check": "silent",
             "draft": False,
             "incrementalCompilesEnabled": True,
-            "rootDocId": None,
             "stopOnFirstError": False,
         },
         headers={

@@ -248,6 +248,7 @@ You can start with just the cookie and add the git token later.
 | `rewrite_file` | Replace entire file contents |
 | `update_section` | Update a LaTeX section body by title |
 | `sync_project` | Pull latest changes from Overleaf |
+| `upload_file` | Upload a local (possibly binary) file, e.g. an image, commit & push |
 
 ### Delete
 
@@ -262,6 +263,13 @@ You can start with just the cookie and add the git token later.
 | `compile_project` | Trigger PDF compilation on Overleaf |
 | `download_pdf` | Download compiled PDF to local path |
 | `download_log` | Download compilation log for debugging |
+
+### Source export
+
+| Tool | Description |
+|---|---|
+| `download_source_zip` | Save the full project source as a ZIP file (requires session cookie) |
+| `download_source` | Download and extract the project source into a local directory (requires session cookie) |
 
 ### Layout & page positions (SyncTeX)
 

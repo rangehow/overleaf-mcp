@@ -102,7 +102,6 @@ def _compile_with_editor_id(project_id: str, editor_id: str) -> dict:
             "check": "silent",
             "draft": False,
             "incrementalCompilesEnabled": True,
-            "rootDocId": None,
             "stopOnFirstError": False,
             "editorId": editor_id,
         },
