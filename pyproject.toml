@@ -50,8 +50,14 @@ dependencies = [
 # beautifulsoup4 is needed (HTML scraping for CSRF token + project list).
 # NOTE: playwright was once listed here but nothing imports it — removed in
 # 0.1.3 to avoid a ~100 MB install.
+# ``websockets`` powers the free-tier web_* tools (web_list_files /
+# web_read_file / web_rewrite_file / web_edit_file): a single short-lived
+# realtime round trip to discover folder/doc ObjectIds that no REST
+# endpoint exposes, used only to make the REST upload endpoint (also
+# session-cookie only) usable without OVERLEAF_GIT_TOKEN.
 compile = [
     "beautifulsoup4>=4.12.0",
+    "websockets>=12.0",
 ]
 
 [project.scripts]
